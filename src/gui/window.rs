@@ -3,6 +3,7 @@ use super::state::{AppState, StateManager};
 use crate::ffi::OnlineStream;
 use crate::injector::TextInjector;
 use crate::recognizer::RecognizerEngine;
+use crate::wayland;
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 
@@ -45,10 +46,19 @@ impl CinnabarWindow {
 }
 
 impl eframe::App for CinnabarWindow {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // 处理热键事件
         if let Some(ref hotkey_manager) = self.hotkey_manager {
             hotkey_manager.lock().unwrap().handle_events();
+        }
+
+        // 窗口定位
+        if let Ok(win_info) = wayland::get_active_window() {
+            let pos = egui::pos2(
+                (win_info.x + win_info.width as i32 / 2 - 125) as f32,
+                (win_info.y - 160) as f32,
+            );
+            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
         }
 
         let state_manager = self.state_manager.lock().unwrap();

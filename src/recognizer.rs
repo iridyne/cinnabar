@@ -1,5 +1,6 @@
 use crate::ffi::OnlineRecognizer;
 use crate::resampler::LinearResampler;
+use crate::vad::VadDetector;
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait};
 use crossbeam_channel::{bounded, Receiver};
@@ -13,6 +14,7 @@ pub struct RecognizerEngine {
     running: Arc<AtomicBool>,
     resampler: Option<LinearResampler>,
     target_sample_rate: u32,
+    vad: VadDetector,
 }
 
 impl RecognizerEngine {
@@ -110,6 +112,7 @@ impl RecognizerEngine {
             running: Arc::new(AtomicBool::new(false)),
             resampler,
             target_sample_rate,
+            vad: VadDetector::new(0.01),
         })
     }
 
@@ -120,6 +123,11 @@ impl RecognizerEngine {
 
         if let Ok(samples) = self.rx.try_recv() {
             if samples.is_empty() {
+                return None;
+            }
+
+            // VAD 检测
+            if !self.vad.is_speech(&samples) {
                 return None;
             }
 

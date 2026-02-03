@@ -1,8 +1,11 @@
+mod config;
 mod ffi;
 mod gui;
 mod injector;
 mod recognizer;
 mod resampler;
+mod vad;
+mod wayland;
 
 use anyhow::{Context, Result};
 use clap::Parser;
