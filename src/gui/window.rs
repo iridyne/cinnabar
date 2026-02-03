@@ -72,7 +72,7 @@ impl eframe::App for CinnabarWindow {
                 (&mut self.recognizer, &mut self.stream)
             {
                 if let Some(text) = recognizer.process(stream) {
-                    let mut state_manager = self.state_manager.lock().unwrap();
+                    let state_manager = self.state_manager.lock().unwrap();
                     state_manager.set_text(text.clone());
                     state_manager.set_state(AppState::Recognizing);
                     drop(state_manager);
@@ -96,7 +96,7 @@ impl eframe::App for CinnabarWindow {
                         }
 
                         // 返回待机状态
-                        let mut state_manager = self.state_manager.lock().unwrap();
+                        let state_manager = self.state_manager.lock().unwrap();
                         state_manager.set_state(AppState::Idle);
                         state_manager.clear_text();
                     }
