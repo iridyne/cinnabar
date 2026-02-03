@@ -1,7 +1,7 @@
 use crate::ffi::OnlineRecognizer;
 use crate::resampler::LinearResampler;
 use anyhow::{Context, Result};
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::traits::{DeviceTrait, HostTrait};
 use crossbeam_channel::{bounded, Receiver};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
