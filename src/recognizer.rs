@@ -2,13 +2,13 @@ use crate::ffi::OnlineRecognizer;
 use crate::resampler::LinearResampler;
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{bounded, Receiver};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 pub struct RecognizerEngine {
     recognizer: OnlineRecognizer,
-    stream: cpal::Stream,
+    _stream: cpal::Stream,
     rx: Receiver<Vec<f32>>,
     running: Arc<AtomicBool>,
     resampler: Option<LinearResampler>,
@@ -105,23 +105,12 @@ impl RecognizerEngine {
 
         Ok(Self {
             recognizer,
-            stream,
+            _stream: stream,
             rx,
             running: Arc::new(AtomicBool::new(false)),
             resampler,
             target_sample_rate,
         })
-    }
-
-    pub fn start(&mut self) -> Result<()> {
-        self.running.store(true, Ordering::Relaxed);
-        self.stream.play()?;
-        Ok(())
-    }
-
-    pub fn stop(&mut self) {
-        self.running.store(false, Ordering::Relaxed);
-        let _ = self.stream.pause();
     }
 
     pub fn process(&mut self, stream: &mut crate::ffi::OnlineStream) -> Option<String> {
