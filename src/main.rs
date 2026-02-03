@@ -177,6 +177,8 @@ fn main() -> Result<()> {
         None
     };
 
+    let mut last_result = String::new();
+
     while running.load(Ordering::Relaxed) {
         if let Ok(samples) = rx.recv_timeout(std::time::Duration::from_millis(100)) {
             if args.verbose {
@@ -222,9 +224,28 @@ fn main() -> Result<()> {
                 eprintln!("[DEBUG] 主循环: 获取结果");
             }
             let result = recognizer.get_result(&stream);
-            if !result.trim().is_empty() {
-                print!("\r{}", result.trim());
-                std::io::Write::flush(&mut std::io::stdout()).ok();
+            let trimmed = result.trim();
+
+            if !trimmed.is_empty() {
+                // 检测句子结束标点
+                let has_sentence_end = trimmed.ends_with('。')
+                    || trimmed.ends_with('？')
+                    || trimmed.ends_with('！')
+                    || trimmed.ends_with('.')
+                    || trimmed.ends_with('?')
+                    || trimmed.ends_with('!');
+
+                if has_sentence_end && trimmed != last_result {
+                    // 句子结束，输出完整句子并换行
+                    print!("\r\x1b[K{}\n", trimmed);
+                    std::io::Write::flush(&mut std::io::stdout()).ok();
+                    last_result.clear();
+                } else {
+                    // 句子未结束，在同一行更新
+                    print!("\r\x1b[K{}", trimmed);
+                    std::io::Write::flush(&mut std::io::stdout()).ok();
+                    last_result = trimmed.to_string();
+                }
             }
 
             if args.verbose {

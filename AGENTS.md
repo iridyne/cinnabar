@@ -2,14 +2,15 @@
 
 ## Project Overview
 
-**Cinnabar** is a lightweight, offline-first, streaming speech-to-text input tool for Linux systems. The name "朱砂" (cinnabar) refers to the red mineral mercury sulfide, symbolizing the transformation of raw audio input into refined text output.
+**Cinnabar (v1.0.0)** is a lightweight, offline-first, streaming speech-to-text input tool for Linux systems. The name "朱砂" (cinnabar) refers to the red mineral mercury sulfide, symbolizing the transformation of raw audio input into refined text output.
 
 ### Core Objectives
 
 - **Offline-First**: All processing happens locally using ONNX models
-- **Streaming**: Real-time partial results with automatic endpoint detection
+- **Streaming**: Real-time partial results with intelligent sentence segmentation
 - **Lightweight**: Minimal dependencies, optimized for edge devices
 - **Linux-Native**: Built specifically for Linux audio stack (ALSA/PipeWire via cpal)
+- **Device Flexible**: Support for multiple audio devices with automatic configuration fallback
 
 ## Architecture
 
@@ -31,17 +32,19 @@ Cinnabar implements a concurrent actor-like architecture with two primary thread
 ### Thread Responsibilities
 
 #### Audio Capture Thread
-- Captures raw audio from default microphone via `cpal`
-- Converts multi-channel audio to mono by averaging channels
-- Resamples from hardware sample rate (44100/48000Hz) to 16000Hz
-- Sends resampled chunks to inference thread via bounded channel
+- Captures raw audio from selected or default microphone via `cpal`
+- Converts multi-channel audio to mono using optimized mixing (sqrt(channels) normalization)
+- Automatically detects device capabilities and falls back to software resampling if needed
+- Resamples from hardware sample rate (44100/48000Hz) to 16000Hz using `LinearResampler`
+- Sends resampled chunks to inference thread via bounded channel (capacity: 100)
 
 #### Inference Thread
 - Receives audio chunks from channel
 - Feeds samples to Sherpa-ONNX OnlineRecognizer
-- Displays partial results during speech
-- Detects sentence endpoints and displays final results
-- Resets recognizer state after each sentence
+- Displays partial results during speech (updates in-place on same line)
+- Detects sentence completion via punctuation marks (。？！.?!)
+- Outputs complete sentences to new line and clears buffer
+- Continues displaying next sentence on cleared line
 
 ## Critical Technical Decisions
 
@@ -49,14 +52,22 @@ Cinnabar implements a concurrent actor-like architecture with two primary thread
 
 **Problem**: Paraformer model requires exactly 16000Hz sample rate, but most hardware defaults to 44100Hz or 48000Hz.
 
-**Solution**: Implemented `LinearResampler` with the following characteristics:
+**Solution**: Implemented dual-strategy approach with automatic fallback:
 
+**Primary Strategy**: Hardware Resampling
+- Attempts to configure device for 16kHz mono directly
+- Uses `supported_input_configs()` to check device capabilities
+- Zero CPU overhead if device supports target configuration
+
+**Fallback Strategy**: Software Resampling via `LinearResampler`
+- Activates when device doesn't support 16kHz
 - **Algorithm**: Linear interpolation between adjacent samples
 - **Stateful**: Maintains buffer to handle fractional sample positions across chunks
 - **Efficient**: Single-pass processing with minimal memory overhead
+- **Boundary Protection**: Handles empty input, minimum sample requirements, buffer overflow
 
 **Implementation Details**:
-```
+```cinnabar/src/resampler.rs#L1-59
 Input:  44100 Hz stream (or 48000 Hz)
 Output: 16000 Hz stream
 Ratio:  2.75625 (44100/16000) or 3.0 (48000/16000)
@@ -69,10 +80,10 @@ For each output sample at position i:
   output[i] = input[idx0] * (1 - frac) + input[idx1] * frac
 ```
 
-**Why Not Hardware Resampling?**
-- Not all audio devices support 16kHz natively
-- Software resampling ensures consistent behavior across hardware
-- Provides control over resampling quality
+**Why Dual Strategy?**
+- Maximizes performance when hardware supports 16kHz
+- Ensures compatibility across all audio devices
+- Provides consistent behavior regardless of hardware capabilities
 
 ### 2. Channel Architecture
 
@@ -81,17 +92,20 @@ For each output sample at position i:
 - Backpressure mechanism: audio thread blocks if channel full
 - Trade-off: 100 chunks ≈ 6.25 seconds of audio buffer at 16kHz
 
-### 3. Endpoint Detection
+### 3. Sentence Segmentation
 
-**Automatic Sentence Segmentation**:
-- Enabled via `enable_endpoint: true` in recognizer config
-- Model detects silence periods to determine sentence boundaries
-- Triggers final result display and recognizer reset
+**Current Implementation**: Punctuation-Based Detection
+- Detects sentence-ending punctuation: 。？！.?!
+- Displays partial results in-place with `\r\x1b[K` (clear line)
+- Outputs complete sentence to new line when punctuation detected
+- Clears buffer and continues on same line for next sentence
 
 **User Experience Flow**:
-1. User speaks: `🤔 Thinking: 我觉得...` (partial, updates in-place)
-2. User pauses: `✅ Final: 我觉得 Rust 很强。` (final, new line)
-3. Recognizer resets, ready for next sentence
+1. User speaks: `我觉得...` (partial, updates in-place)
+2. Sentence ends: `我觉得 Rust 很强。` (complete, new line)
+3. Buffer clears, ready for next sentence on new line
+
+**Note**: Original endpoint detection via `SherpaOnnxOnlineStreamIsEndpoint` is disabled due to FFI crashes (see Appendix A). Current implementation provides similar UX through punctuation detection.
 
 ### 4. Model Selection
 

@@ -102,6 +102,7 @@ pub struct SherpaOnnxOnlineRecognizerResult {
     pub json: *const c_char,
 }
 
+#[allow(dead_code)]
 #[link(name = "sherpa-onnx-c-api")]
 extern "C" {
     pub fn SherpaOnnxCreateOnlineRecognizer(
