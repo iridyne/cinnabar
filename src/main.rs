@@ -1,4 +1,7 @@
 mod ffi;
+mod gui;
+mod injector;
+mod recognizer;
 mod resampler;
 
 use anyhow::{Context, Result};
@@ -15,7 +18,11 @@ use std::sync::Arc;
 #[command(name = "cinnabar")]
 #[command(about = "轻量级、离线优先的 Linux 流式语音转文字工具")]
 struct Args {
-    #[arg(short, long, default_value = "./models")]
+    /// 运行模式：cli 或 gui
+    #[arg(short, long, default_value = "cli")]
+    mode: String,
+
+    #[arg(short = 'M', long, default_value = "./models")]
     model_dir: PathBuf,
 
     #[arg(long)]
@@ -34,6 +41,14 @@ struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
 
+    // 模式切换
+    match args.mode.as_str() {
+        "gui" => return gui::run_gui_mode(),
+        "cli" => {} // 继续执行 CLI 模式
+        _ => anyhow::bail!("无效的模式。使用 'cli' 或 'gui'"),
+    }
+
+    // CLI 模式
     let host = cpal::default_host();
 
     if args.list_devices {

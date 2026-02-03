@@ -13,6 +13,13 @@ clap = { version = "4.5", features = ["derive"] }
 sherpa-rs-sys = "0.6"
 crossbeam-channel = "0.5"
 ctrlc = "3.4"
+arboard = "3.4"
+evdev = "0.12"
+
+# GUI 模式依赖
+egui = "0.30"
+eframe = { version = "0.30", default-features = false, features = ["wayland", "glow"] }
+global-hotkey = "0.6"
 
 [profile.release]
 opt-level = 3

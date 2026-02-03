@@ -2,6 +2,12 @@
 
 ## 当前版本：v1.0.0
 
+### 架构模式
+
+Cinnabar 支持两种运行模式：
+- **CLI 模式**：纯终端模式，用于研究和测试语音识别效果（当前已实现）
+- **GUI 模式**：悬浮窗模式，按 F3 触发语音输入，自动注入文本（规划中）
+
 ### 已完成功能
 
 #### Phase 1: CLI 核心演示 ✅
@@ -23,29 +29,44 @@
 
 ## 短期规划（Phase 2）
 
-### 虚拟键盘集成
+### GUI 模式实现
 
-**目标**：实现语音输入到任意应用程序
+**目标**：实现悬浮窗模式，支持热键触发和自动文本注入
 
-**核心功能**：
-- [ ] 使用 `uinput` 创建虚拟键盘设备
-- [ ] 实现键盘事件注入
-- [ ] 热键激活/停止语音输入（如 Ctrl+Space）
-- [ ] Unicode 字符输入支持
-- [ ] 输入状态指示
+#### Phase 2.1: 基础 GUI 框架（v1.1.0）
+- [ ] 创建 `src/gui/` 模块
+- [ ] 实现基础悬浮窗（egui + eframe）
+- [ ] 实现 CLI/GUI 模式切换
+- [ ] 显示状态信息（待机/监听/识别中）
+
+#### Phase 2.2: 热键集成（v1.2.0）
+- [ ] 集成 `global-hotkey` crate
+- [ ] 注册 F3 热键
+- [ ] 实现热键触发语音输入
+- [ ] 状态机管理（待机 → 监听 → 识别 → 注入）
+
+#### Phase 2.3: 文本注入集成（v1.3.0）
+- [ ] 集成 `TextInjector` 模块（已实现）
+- [ ] 自动注入识别结果到激活窗口
+- [ ] 添加注入成功/失败反馈
+- [ ] 支持中英文混合输入
+
+#### Phase 2.4: 窗口定位（v1.4.0）
+- [ ] 实现 Wayland 窗口信息获取
+- [ ] 检测激活窗口和输入框位置
+- [ ] 悬浮窗自动定位到输入框附近
+- [ ] 支持多种定位策略
 
 **技术栈**：
-- `evdev` (0.12) - 虚拟键盘设备创建
-- `global-hotkey` (0.6) - 跨平台热键监听
-- `tokio` (1.42) - 异步运行时
+- `egui` (0.30) + `eframe` (0.30) - GUI 框架
+- `global-hotkey` (0.6) - 全局热键
+- `wayland-client` (0.31) - Wayland 协议
+- `arboard` (3.4) + `evdev` (0.12) - 文本注入（已实现）
 
-**权限配置**：
-```cinnabar/docs/ROADMAP.md#L40-44
-# 一次性设置
-sudo usermod -aG input $USER
-# 或使用 udev 规则
-echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' | sudo tee /etc/udev/rules.d/99-cinnabar.rules
-```
+**Wayland 支持**：
+- ✅ Sway, Hyprland, GNOME, KDE Plasma
+- 使用 `zwlr_layer_shell_v1` 创建悬浮层
+- 使用 `wlr_foreign_toplevel_management` 获取窗口信息
 
 **优先级**：高
 
@@ -148,6 +169,8 @@ echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' | sudo tee /etc/udev/rules.d
 | 缺少单元测试 | 中 | 待实现 | 全局 |
 | 缺少配置文件支持 | 中 | Phase 3 | - |
 | 编译警告处理 | 低 | ✅ 已完成 | `src/ffi/mod.rs` |
+| GUI 模式未实现 | 高 | Phase 2 | - |
+| 窗口定位功能 | 中 | Phase 2.4 | - |
 
 ---
 
@@ -156,17 +179,18 @@ echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' | sudo tee /etc/udev/rules.d
 欢迎贡献！优先级排序：
 
 1. **高优先级**：
-   - 修复 endpoint 检测崩溃问题
-   - 实现虚拟键盘集成（Phase 2）
+   - 实现 GUI 模式（Phase 2.1-2.3）
+   - 热键集成和文本注入
    - 添加单元测试
 
 2. **中优先级**：
+   - 窗口定位功能（Phase 2.4）
+   - 修复 endpoint 检测崩溃问题
    - 实现 VAD 功能
-   - 添加多模型支持
    - 配置文件支持
 
 3. **低优先级**：
-   - GUI 实现
+   - 添加多模型支持
    - 使用 bindgen 自动生成 FFI 绑定
    - 性能优化
 
@@ -176,6 +200,7 @@ echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' | sudo tee /etc/udev/rules.d
 
 - **v1.0.0** (2026-02-03)
   - Phase 1.5 完成
+  - CLI 模式完整实现
   - 设备管理功能（`--list-devices`, `--device`, `--device-name`）
   - 音频优化（配置回退、自动重采样、多声道混音）
   - SIGSEGV 崩溃修复（禁用 endpoint 检测）
@@ -183,6 +208,8 @@ echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' | sudo tee /etc/udev/rules.d
   - 优化终端输出显示（清空缓冲区、同行更新）
   - 调试模式（`--verbose`）
   - 自动 rpath 配置
+  - 文本注入模块（`TextInjector`）
+  - 双模式架构设计（CLI/GUI）
 
 - **v0.1.0** (2026-02-03)
   - Phase 1 完成
@@ -191,7 +218,27 @@ echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' | sudo tee /etc/udev/rules.d
 
 ---
 
-**最后更新**: 2026-02-03 12:51  
+**最后更新**: 2026-02-03 14:42  
 **维护者**: Cinnabar Team  
 **许可证**: MIT  
-**当前状态**: 生产就绪，核心功能完整
+**当前状态**: CLI 模式生产就绪，GUI 模式开发中
+
+## 使用指南
+
+### CLI 模式（当前可用）
+```/dev/null/bash#L1-5
+# 默认 CLI 模式
+cargo run --release
+
+# 启用调试输出
+cargo run --release -- --verbose
+```
+
+### GUI 模式（开发中）
+```/dev/null/bash#L1-5
+# 启动 GUI 模式（v1.1.0+）
+cargo run --release -- --mode gui
+
+# 自定义热键
+cargo run --release -- --mode gui --hotkey F4
+```
