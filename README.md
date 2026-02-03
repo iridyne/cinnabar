@@ -53,6 +53,15 @@ cargo run --release
 
 # 指定自定义模型目录
 cargo run --release -- --model-dir /path/to/models
+
+# 列出所有可用的音频输入设备
+cargo run --release -- --list-devices
+
+# 使用指定的设备（通过索引）
+cargo run --release -- --device 1
+
+# 使用指定的设备（通过名称）
+cargo run --release -- --device-name "麦克风名称"
 ```
 
 #### 预期输出
@@ -138,6 +147,12 @@ Press Ctrl+C to stop...
 - [x] 自动断句
 - [x] 终端输出
 
+### Phase 1.5: 音频设备管理 ✅
+- [x] 设备枚举和选择
+- [x] 音频配置回退机制
+- [x] 自动 rpath 配置
+- [x] 多声道混音支持
+
 ### Phase 2: 虚拟键盘集成
 - [ ] Linux `uinput` 集成
 - [ ] 模拟键盘事件
@@ -181,6 +196,6 @@ Press Ctrl+C to stop...
 
 ---
 
-**版本**: 0.1.0 (MVP)  
-**状态**: 核心演示完成  
+**版本**: 0.1.1 (Phase 1.5)  
+**状态**: 设备管理和音频优化完成  
 **最后更新**: 2026-02-03

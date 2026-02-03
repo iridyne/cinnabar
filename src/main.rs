@@ -1,215 +1,268 @@
+mod ffi;
+mod resampler;
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use crossbeam_channel::{bounded, Sender};
-use sherpa_onnx::{OnlineRecognizer, OnlineRecognizerConfig};
+use crossbeam_channel::bounded;
+use ffi::OnlineRecognizer;
+use resampler::LinearResampler;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 #[derive(Parser, Debug)]
 #[command(name = "cinnabar")]
-#[command(about = "Lightweight, offline-first, streaming speech-to-text for Linux", long_about = None)]
+#[command(about = "轻量级、离线优先的 Linux 流式语音转文字工具")]
 struct Args {
     #[arg(short, long, default_value = "./models")]
     model_dir: PathBuf,
-}
 
-struct LinearResampler {
-    from_rate: f32,
-    to_rate: f32,
-    buffer: Vec<f32>,
-}
+    #[arg(long)]
+    list_devices: bool,
 
-impl LinearResampler {
-    fn new(from_rate: u32, to_rate: u32) -> Self {
-        Self {
-            from_rate: from_rate as f32,
-            to_rate: to_rate as f32,
-            buffer: Vec::new(),
-        }
-    }
+    #[arg(short, long)]
+    device: Option<usize>,
 
-    fn resample(&mut self, input: &[f32]) -> Vec<f32> {
-        if (self.from_rate - self.to_rate).abs() < 1.0 {
-            return input.to_vec();
-        }
+    #[arg(long)]
+    device_name: Option<String>,
 
-        self.buffer.extend_from_slice(input);
-        let ratio = self.from_rate / self.to_rate;
-        let output_len = (self.buffer.len() as f32 / ratio) as usize;
-        let mut output = Vec::with_capacity(output_len);
-
-        for i in 0..output_len {
-            let src_idx = i as f32 * ratio;
-            let idx0 = src_idx.floor() as usize;
-            let idx1 = (idx0 + 1).min(self.buffer.len() - 1);
-            let frac = src_idx - idx0 as f32;
-
-            if idx0 < self.buffer.len() {
-                let sample = self.buffer[idx0] * (1.0 - frac) + self.buffer[idx1] * frac;
-                output.push(sample);
-            }
-        }
-
-        let consumed = (output_len as f32 * ratio) as usize;
-        self.buffer.drain(..consumed.min(self.buffer.len()));
-
-        output
-    }
-}
-
-fn audio_capture_thread(tx: Sender<Vec<f32>>, running: Arc<AtomicBool>) -> Result<()> {
-    let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .context("No input device available")?;
-
-    let config = device
-        .default_input_config()
-        .context("Failed to get default input config")?;
-
-    let sample_rate = config.sample_rate().0;
-    let channels = config.channels() as usize;
-
-    println!("🎤 Microphone: {} Hz, {} channels", sample_rate, channels);
-
-    let mut resampler = LinearResampler::new(sample_rate, 16000);
-
-    let stream = device.build_input_stream(
-        &config.into(),
-        move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            let mono: Vec<f32> = data
-                .chunks(channels)
-                .map(|frame| frame.iter().sum::<f32>() / channels as f32)
-                .collect();
-
-            let resampled = resampler.resample(&mono);
-            if !resampled.is_empty() {
-                let _ = tx.send(resampled);
-            }
-        },
-        |err| eprintln!("Audio stream error: {}", err),
-        None,
-    )?;
-
-    stream.play()?;
-
-    while running.load(Ordering::Relaxed) {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-
-    Ok(())
-}
-
-fn inference_thread(
-    rx: crossbeam_channel::Receiver<Vec<f32>>,
-    model_dir: PathBuf,
-    running: Arc<AtomicBool>,
-) -> Result<()> {
-    let config = OnlineRecognizerConfig {
-        model_config: sherpa_onnx::OnlineModelConfig {
-            paraformer: sherpa_onnx::OnlineParaformerModelConfig {
-                encoder: model_dir
-                    .join("encoder.int8.onnx")
-                    .to_string_lossy()
-                    .to_string(),
-                decoder: model_dir
-                    .join("decoder.int8.onnx")
-                    .to_string_lossy()
-                    .to_string(),
-            },
-            tokens: model_dir.join("tokens.txt").to_string_lossy().to_string(),
-            num_threads: 4,
-            provider: "cpu".to_string(),
-            debug: false,
-            ..Default::default()
-        },
-        enable_endpoint: true,
-        max_active_paths: 4,
-        ..Default::default()
-    };
-
-    let recognizer = OnlineRecognizer::new(config).context("Failed to create recognizer")?;
-    let mut stream = recognizer.create_stream();
-
-    println!("✅ Model loaded. Listening...\n");
-
-    let mut last_text = String::new();
-
-    while running.load(Ordering::Relaxed) {
-        match rx.recv_timeout(std::time::Duration::from_millis(100)) {
-            Ok(samples) => {
-                stream.accept_waveform(16000, &samples);
-
-                while recognizer.is_ready(&stream) {
-                    recognizer.decode_stream(&mut stream);
-                }
-
-                let result = recognizer.get_result(&stream);
-                let text = result.text.trim();
-
-                if !text.is_empty() && text != last_text {
-                    print!("\r🤔 Thinking: {}", text);
-                    std::io::Write::flush(&mut std::io::stdout()).ok();
-                    last_text = text.to_string();
-                }
-
-                if recognizer.is_endpoint(&stream) {
-                    let final_result = recognizer.get_result(&stream);
-                    let final_text = final_result.text.trim();
-
-                    if !final_text.is_empty() {
-                        println!("\r✅ Final: {}\n", final_text);
-                        last_text.clear();
-                    }
-
-                    recognizer.reset(&mut stream);
-                }
-            }
-            Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
-            Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
-        }
-    }
-
-    Ok(())
+    #[arg(short, long)]
+    verbose: bool,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    if !args.model_dir.exists() {
-        anyhow::bail!(
-            "Model directory not found: {}\nRun ./setup_models.sh first",
-            args.model_dir.display()
-        );
+    let host = cpal::default_host();
+
+    if args.list_devices {
+        println!("可用的音频输入设备：\n");
+        for (idx, device) in host.input_devices()?.enumerate() {
+            let name = device.name().unwrap_or_else(|_| "未知设备".to_string());
+            let config = device.default_input_config();
+            match config {
+                Ok(cfg) => println!(
+                    "  [{}] {} - {} Hz, {} 声道",
+                    idx,
+                    name,
+                    cfg.sample_rate().0,
+                    cfg.channels()
+                ),
+                Err(_) => println!("  [{}] {} - 无法获取配置", idx, name),
+            }
+        }
+        return Ok(());
     }
 
-    println!("🔥 Cinnabar (朱砂) - Streaming Speech-to-Text");
-    println!("Model: {}", args.model_dir.display());
+    if !args.model_dir.exists() {
+        anyhow::bail!("未找到模型目录：{}", args.model_dir.display());
+    }
 
-    let (tx, rx) = bounded(100);
+    let recognizer = OnlineRecognizer::new(
+        &args.model_dir.join("encoder.int8.onnx").to_string_lossy(),
+        &args.model_dir.join("decoder.int8.onnx").to_string_lossy(),
+        &args.model_dir.join("tokens.txt").to_string_lossy(),
+        4,
+    )?;
+
+    let mut stream = recognizer.create_stream();
+
+    let device = if let Some(idx) = args.device {
+        host.input_devices()?
+            .nth(idx)
+            .context(format!("设备索引 {} 无效", idx))?
+    } else if let Some(name) = &args.device_name {
+        host.input_devices()?
+            .find(|d| d.name().ok().as_ref() == Some(name))
+            .context(format!("未找到设备名称: {}", name))?
+    } else {
+        host.default_input_device().context("未找到默认输入设备")?
+    };
+
+    println!(
+        "🎤 使用设备: {}",
+        device.name().unwrap_or_else(|_| "未知设备".to_string())
+    );
+
+    // 尝试配置 16000Hz 单声道，如果不支持则使用默认配置并启用重采样
+    let target_sample_rate = 16000;
+
+    // 检查设备是否支持 16kHz 单声道配置
+    let supports_16khz = device
+        .supported_input_configs()
+        .ok()
+        .and_then(|configs| {
+            configs.filter(|c| c.channels() == 1).find(|c| {
+                let min = c.min_sample_rate().0;
+                let max = c.max_sample_rate().0;
+                target_sample_rate >= min && target_sample_rate <= max
+            })
+        })
+        .is_some();
+
+    let (config, use_resampler) = if supports_16khz {
+        println!("🔧 使用配置: 16000 Hz, 1 声道");
+        (
+            cpal::StreamConfig {
+                channels: 1,
+                sample_rate: cpal::SampleRate(target_sample_rate),
+                buffer_size: cpal::BufferSize::Default,
+            },
+            false,
+        )
+    } else {
+        let default_config = device.default_input_config()?;
+        let sample_rate = default_config.sample_rate().0;
+        println!(
+            "⚠️  16kHz 不支持，使用默认配置: {} Hz, {} 声道（将启用重采样）",
+            sample_rate,
+            default_config.channels()
+        );
+        (
+            cpal::StreamConfig {
+                channels: default_config.channels(),
+                sample_rate: default_config.sample_rate(),
+                buffer_size: cpal::BufferSize::Default,
+            },
+            sample_rate != target_sample_rate,
+        )
+    };
+
     let running = Arc::new(AtomicBool::new(true));
-
-    let running_audio = running.clone();
-    let audio_thread = std::thread::spawn(move || audio_capture_thread(tx, running_audio));
-
-    let running_inference = running.clone();
-    let model_dir = args.model_dir.clone();
-    let inference_thread =
-        std::thread::spawn(move || inference_thread(rx, model_dir, running_inference));
-
-    println!("Press Ctrl+C to stop...\n");
+    let running_clone = running.clone();
 
     ctrlc::set_handler(move || {
-        running.store(false, Ordering::Relaxed);
-    })
-    .context("Failed to set Ctrl+C handler")?;
+        running_clone.store(false, Ordering::Relaxed);
+    })?;
 
-    audio_thread.join().unwrap()?;
-    inference_thread.join().unwrap()?;
+    let (tx, rx) = bounded::<Vec<f32>>(100);
+    let actual_sample_rate = config.sample_rate.0;
+    let channels = config.channels;
+    let verbose = args.verbose;
 
-    println!("\n👋 Goodbye!");
+    let audio_stream = device.build_input_stream(
+        &config,
+        move |data: &[f32], _| {
+            if verbose {
+                eprintln!("[DEBUG] 音频回调: 接收到 {} 个样本", data.len());
+            }
+            let mono_data: Vec<f32> = if channels > 1 {
+                data.chunks(channels as usize)
+                    .map(|chunk| {
+                        let sum: f32 = chunk.iter().sum();
+                        // 使用 sqrt(channels) 作为除数，避免音量过小
+                        sum / (channels as f32).sqrt()
+                    })
+                    .collect()
+            } else {
+                data.to_vec()
+            };
+            if verbose {
+                eprintln!("[DEBUG] 音频回调: 混音后 {} 个样本", mono_data.len());
+            }
+            let _ = tx.try_send(mono_data);
+        },
+        |err| eprintln!("错误：{}", err),
+        None,
+    )?;
+
+    audio_stream.play()?;
+
+    println!("开始监听... 按 Ctrl+C 停止");
+
+    let mut resampler = if use_resampler {
+        Some(LinearResampler::new(actual_sample_rate, target_sample_rate))
+    } else {
+        None
+    };
+
+    while running.load(Ordering::Relaxed) {
+        if let Ok(samples) = rx.recv_timeout(std::time::Duration::from_millis(100)) {
+            if args.verbose {
+                eprintln!("[DEBUG] 主循环: 接收到 {} 个样本", samples.len());
+            }
+            if samples.is_empty() {
+                continue;
+            }
+
+            if args.verbose {
+                eprintln!("[DEBUG] 主循环: 开始重采样");
+            }
+            let resampled = if let Some(ref mut r) = resampler {
+                r.resample(&samples)
+            } else {
+                samples
+            };
+            if args.verbose {
+                eprintln!("[DEBUG] 主循环: 重采样后 {} 个样本", resampled.len());
+            }
+
+            // 检查重采样后的数据是否为空
+            if resampled.is_empty() {
+                continue;
+            }
+
+            if args.verbose {
+                eprintln!("[DEBUG] 主循环: 调用 accept_waveform");
+            }
+            stream.accept_waveform(target_sample_rate as i32, &resampled);
+
+            if args.verbose {
+                eprintln!("[DEBUG] 主循环: 检查 is_ready");
+            }
+            while recognizer.is_ready(&stream) {
+                if args.verbose {
+                    eprintln!("[DEBUG] 主循环: 调用 decode");
+                }
+                recognizer.decode(&mut stream);
+            }
+
+            if args.verbose {
+                eprintln!("[DEBUG] 主循环: 获取结果");
+            }
+            let result = recognizer.get_result(&stream);
+            if !result.trim().is_empty() {
+                print!("\r{}", result.trim());
+                std::io::Write::flush(&mut std::io::stdout()).ok();
+            }
+
+            if args.verbose {
+                eprintln!("[DEBUG] 主循环: 检查 endpoint");
+                eprintln!("[DEBUG] 主循环: 准备调用 is_endpoint 函数");
+            }
+            let is_endpoint = recognizer.is_endpoint(&stream);
+            if args.verbose {
+                eprintln!("[DEBUG] 主循环: is_endpoint 函数调用完成");
+                eprintln!("[DEBUG] 主循环: endpoint = {}", is_endpoint);
+            }
+            if is_endpoint {
+                if args.verbose {
+                    eprintln!("[DEBUG] 主循环: endpoint 为 true，获取最终结果");
+                }
+                let final_result = recognizer.get_result(&stream);
+                if args.verbose {
+                    eprintln!(
+                        "[DEBUG] 主循环: 获取到最终结果，长度 = {}",
+                        final_result.len()
+                    );
+                }
+                if !final_result.trim().is_empty() {
+                    println!("\n✅ {}", final_result.trim());
+                }
+                if args.verbose {
+                    eprintln!("[DEBUG] 主循环: 准备重置流");
+                }
+                recognizer.reset(&mut stream);
+                if args.verbose {
+                    eprintln!("[DEBUG] 主循环: 流已重置");
+                }
+            }
+            if args.verbose {
+                eprintln!("[DEBUG] 主循环: 本次循环结束");
+            }
+        }
+    }
 
     Ok(())
 }
