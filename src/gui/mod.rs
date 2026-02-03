@@ -13,9 +13,18 @@ use std::sync::{Arc, Mutex};
 
 /// 运行 GUI 模式
 pub fn run_gui_mode() -> Result<()> {
+    // 加载配置
+    let config =
+        crate::config::Config::load(&std::path::PathBuf::from("./config.toml")).unwrap_or_default();
+
     // 创建热键管理器
+    let hotkey_code = match config.hotkey.as_str() {
+        "F3" => Code::F3,
+        "F4" => Code::F4,
+        _ => Code::F3,
+    };
     let hotkey_manager = Arc::new(Mutex::new(
-        HotkeyManager::new(Code::F3).context("Failed to create hotkey manager")?,
+        HotkeyManager::new(hotkey_code).context("Failed to create hotkey manager")?,
     ));
 
     let options = eframe::NativeOptions {

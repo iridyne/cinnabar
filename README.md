@@ -48,8 +48,14 @@ cargo run --release
 #### 基本使用
 
 ```bash
-# 使用默认模型目录 (./models)
+# CLI 模式（默认）
 cargo run --release
+
+# GUI 模式
+cargo run --release -- --mode gui
+
+# 使用配置文件
+cargo run --release -- --config config.toml
 
 # 指定自定义模型目录
 cargo run --release -- --model-dir /path/to/models
@@ -62,6 +68,21 @@ cargo run --release -- --device 1
 
 # 使用指定的设备（通过名称）
 cargo run --release -- --device-name "麦克风名称"
+```
+
+#### 配置文件
+
+创建 `config.toml` 文件：
+
+```toml
+# 模型目录路径
+model_dir = "./models"
+
+# VAD 阈值（0.0-1.0）
+vad_threshold = 0.01
+
+# 热键设置
+hotkey = "F3"
 ```
 
 #### 预期输出

@@ -1,0 +1,10 @@
+# Cinnabar 配置文件示例
+
+# 模型目录路径
+model_dir = "./models"
+
+# VAD 阈值（0.0-1.0，越高越严格）
+vad_threshold = 0.01
+
+# 热键设置（支持 F3, F4 等）
+hotkey = "F3"

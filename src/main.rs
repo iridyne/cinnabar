@@ -28,6 +28,9 @@ struct Args {
     #[arg(short = 'M', long, default_value = "./models")]
     model_dir: PathBuf,
 
+    #[arg(short, long)]
+    config: Option<PathBuf>,
+
     #[arg(long)]
     list_devices: bool,
 
@@ -43,6 +46,13 @@ struct Args {
 
 fn main() -> Result<()> {
     let args = Args::parse();
+
+    // 加载配置文件
+    let config = if let Some(config_path) = &args.config {
+        config::Config::load(config_path)?
+    } else {
+        config::Config::default()
+    };
 
     // 模式切换
     match args.mode.as_str() {
