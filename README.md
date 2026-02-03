@@ -180,9 +180,12 @@ Press Ctrl+C to stop...
 - [x] 热键激活（F3）
 - [x] egui 悬浮窗
 - [x] 状态管理和文本注入
+- [x] Wayland 窗口定位
 
-### Phase 3: 高级特性
-- [ ] 语音活动检测（VAD）
+### Phase 3: 高级特性 ✅
+- [x] 语音活动检测（VAD）
+- [x] 配置文件支持（TOML）
+- [x] 自动断句（500ms 静音检测）
 - [ ] 多模型支持（Whisper、Conformer）
 - [ ] 标点符号恢复
 - [ ] 自定义词汇注入
@@ -195,17 +198,33 @@ Press Ctrl+C to stop...
 
 ## 文档
 
-- [架构设计文档](docs/AGENTS.md) - 详细的技术架构和设计决策
+### 核心文档
+- [架构设计文档](AGENTS.md) - 详细的技术架构和设计决策
+- [开发路线图](docs/ROADMAP.md) - 项目规划、FAQ 和版本历史
 
-## 贡献指南
+### 用户指南
+- [安装指南](docs/INSTALL.md) - 详细的安装步骤和平台支持
+- [故障排除指南](docs/TROUBLESHOOTING.md) - 常见问题诊断和解决方案
+- [性能调优指南](docs/PERFORMANCE.md) - 性能优化和基准测试
 
-欢迎贡献！请遵循以下步骤：
+### 开发者指南
+- [贡献指南](docs/CONTRIBUTING.md) - 如何为项目做出贡献
 
+## 贡献
+
+欢迎贡献！详细信息请查看 [贡献指南](docs/CONTRIBUTING.md)。
+
+简要步骤：
 1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
+2. 创建特性分支
+3. 提交更改
+4. 开启 Pull Request
+
+## 社区
+
+- [GitHub Issues](https://github.com/yourusername/cinnabar/issues) - 报告 Bug 或提出功能请求
+- [GitHub Discussions](https://github.com/yourusername/cinnabar/discussions) - 讨论和提问
+- [开发路线图](docs/ROADMAP.md) - 查看项目规划和进度
 
 ## 许可证
 
@@ -219,6 +238,7 @@ Press Ctrl+C to stop...
 
 ---
 
-**版本**: 1.2.1 (Phase 2.4 + Phase 3 完成)  
-**状态**: 生产就绪，所有核心功能完整实现  
-**最后更新**: 2026-02-03
+**版本**: v1.2.3  
+**状态**: 生产就绪，CLI 和 GUI 模式完整实现，Endpoint 检测已优化  
+**最后更新**: 2026-02-03  
+**维护者**: Cinnabar Team

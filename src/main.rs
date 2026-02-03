@@ -16,6 +16,7 @@ use resampler::LinearResampler;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use vad::EndpointDetector;
 
 #[derive(Parser, Debug)]
 #[command(name = "cinnabar")]
@@ -198,6 +199,7 @@ fn main() -> Result<()> {
         None
     };
 
+    let mut endpoint_detector = EndpointDetector::new(0.01, target_sample_rate, 1.2, 0.5);
     let mut last_result = String::new();
     let mut last_update_time = std::time::Instant::now();
 
@@ -213,24 +215,24 @@ fn main() -> Result<()> {
             if args.verbose {
                 eprintln!("[DEBUG] 主循环: 开始重采样");
             }
-            let resampled = if let Some(ref mut r) = resampler {
+            let samples_16k = if let Some(ref mut r) = resampler {
                 r.resample(&samples)
             } else {
                 samples
             };
             if args.verbose {
-                eprintln!("[DEBUG] 主循环: 重采样后 {} 个样本", resampled.len());
+                eprintln!("[DEBUG] 主循环: 重采样后 {} 个样本", samples_16k.len());
             }
 
             // 检查重采样后的数据是否为空
-            if resampled.is_empty() {
+            if samples_16k.is_empty() {
                 continue;
             }
 
             if args.verbose {
                 eprintln!("[DEBUG] 主循环: 调用 accept_waveform");
             }
-            stream.accept_waveform(target_sample_rate as i32, &resampled);
+            stream.accept_waveform(target_sample_rate as i32, &samples_16k);
 
             if args.verbose {
                 eprintln!("[DEBUG] 主循环: 检查 is_ready");
@@ -261,11 +263,9 @@ fn main() -> Result<()> {
 
             if args.verbose {
                 eprintln!("[DEBUG] 主循环: 检查 endpoint");
-                eprintln!("[DEBUG] 主循环: 准备调用 is_endpoint 函数");
             }
-            let is_endpoint = recognizer.is_endpoint(&stream);
+            let is_endpoint = endpoint_detector.accept_waveform(&samples_16k);
             if args.verbose {
-                eprintln!("[DEBUG] 主循环: is_endpoint 函数调用完成");
                 eprintln!("[DEBUG] 主循环: endpoint = {}", is_endpoint);
             }
             if is_endpoint {
@@ -283,11 +283,12 @@ fn main() -> Result<()> {
                     println!("\n✅ {}", final_result.trim());
                 }
                 if args.verbose {
-                    eprintln!("[DEBUG] 主循环: 准备重置流");
+                    eprintln!("[DEBUG] 主循环: 准备重置流和检测器");
                 }
                 recognizer.reset(&mut stream);
+                endpoint_detector.reset();
                 if args.verbose {
-                    eprintln!("[DEBUG] 主循环: 流已重置");
+                    eprintln!("[DEBUG] 主循环: 流和检测器已重置");
                 }
             }
             if args.verbose {

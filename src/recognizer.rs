@@ -1,6 +1,6 @@
 use crate::ffi::OnlineRecognizer;
 use crate::resampler::LinearResampler;
-use crate::vad::VadDetector;
+use crate::vad::{EndpointDetector, VadDetector};
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait};
 use crossbeam_channel::{bounded, Receiver};
@@ -15,6 +15,7 @@ pub struct RecognizerEngine {
     resampler: Option<LinearResampler>,
     target_sample_rate: u32,
     vad: VadDetector,
+    endpoint_detector: EndpointDetector,
 }
 
 impl RecognizerEngine {
@@ -113,6 +114,7 @@ impl RecognizerEngine {
             resampler,
             target_sample_rate,
             vad: VadDetector::new(0.01),
+            endpoint_detector: EndpointDetector::new(0.01, target_sample_rate, 1.2, 0.5),
         })
     }
 
@@ -169,5 +171,15 @@ impl RecognizerEngine {
 
     pub fn create_stream(&self) -> crate::ffi::OnlineStream {
         self.recognizer.create_stream()
+    }
+
+    #[allow(dead_code)]
+    pub fn is_endpoint(&mut self, samples: &[f32]) -> bool {
+        self.endpoint_detector.accept_waveform(samples)
+    }
+
+    #[allow(dead_code)]
+    pub fn reset_endpoint(&mut self) {
+        self.endpoint_detector.reset();
     }
 }

@@ -230,7 +230,7 @@ impl OnlineRecognizer {
                 },
             };
 
-            let recognizer = SherpaOnnxCreateOnlineRecognizer(&config);
+            let recognizer = SherpaOnnxCreateOnlineRecognizer(&raw const config);
             if recognizer.is_null() {
                 anyhow::bail!("创建识别器失败");
             }
@@ -280,14 +280,18 @@ impl OnlineRecognizer {
         }
     }
 
+    /// 已弃用：使用 `vad::EndpointDetector` 替代
+    ///
+    /// sherpa-onnx 的 endpoint 检测在某些平台上存在崩溃问题。
+    /// 推荐使用 `vad::EndpointDetector` 进行基于 VAD 和静音时长的 endpoint 检测。
+    #[deprecated(since = "1.2.3", note = "使用 vad::EndpointDetector 替代")]
+    #[allow(dead_code)]
     pub fn is_endpoint(&self, stream: &OnlineStream) -> bool {
         if stream.stream.is_null() {
             eprintln!("[WARNING] stream.stream is null in is_endpoint");
             return false;
         }
-        // 暂时禁用 endpoint 检测以避免崩溃
-        // TODO: 调查 sherpa-onnx 库的 endpoint 检测问题
-        // unsafe { SherpaOnnxOnlineStreamIsEndpoint(stream.stream) != 0 }
+        // 禁用以避免崩溃，使用 vad::EndpointDetector 替代
         false
     }
 

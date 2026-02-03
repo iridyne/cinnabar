@@ -94,18 +94,40 @@ For each output sample at position i:
 
 ### 3. Sentence Segmentation
 
-**Current Implementation**: Punctuation-Based Detection
+**Current Implementation**: VAD-Based Endpoint Detection + Punctuation Fallback
+
+**Primary Strategy**: `EndpointDetector` (v1.2.3+)
+- Custom implementation in `src/vad.rs` replacing sherpa-onnx's unstable `is_endpoint`
+- Combines VAD (Voice Activity Detection) with silence duration tracking
+- Triggers endpoint when: speech duration ≥ 0.5s AND silence duration ≥ 1.2s
+- Stateful design with `reset()` for multi-sentence sessions
+- Used in both CLI and GUI modes via `RecognizerEngine`
+
+**Fallback Strategy**: Punctuation-Based Detection (GUI mode)
 - Detects sentence-ending punctuation: 。？！.?!
-- Displays partial results in-place with `\r\x1b[K` (clear line)
-- Outputs complete sentence to new line when punctuation detected
-- Clears buffer and continues on same line for next sentence
+- Provides immediate feedback for punctuated sentences
+- Complements VAD-based detection for better UX
 
 **User Experience Flow**:
 1. User speaks: `我觉得...` (partial, updates in-place)
-2. Sentence ends: `我觉得 Rust 很强。` (complete, new line)
-3. Buffer clears, ready for next sentence on new line
+2. Silence detected: `我觉得 Rust 很强` (endpoint triggered)
+3. Or punctuation detected: `我觉得 Rust 很强。` (immediate output)
+4. Buffer clears, ready for next sentence
 
-**Note**: Original endpoint detection via `SherpaOnnxOnlineStreamIsEndpoint` is disabled due to FFI crashes (see Appendix A). Current implementation provides similar UX through punctuation detection.
+**Technical Details**:
+```rust
+pub struct EndpointDetector {
+    vad: VadDetector,              // Energy-based VAD
+    sample_rate: u32,              // 16000 Hz
+    min_silence_duration: f32,     // 1.2s default
+    min_speech_duration: f32,      // 0.5s default
+    silence_samples: u32,          // Accumulated silence
+    speech_samples: u32,           // Accumulated speech
+}
+```
+
+**Migration Note**: Original `SherpaOnnxOnlineStreamIsEndpoint` is deprecated due to FFI crashes (see Appendix A). The new `EndpointDetector` provides more reliable and customizable endpoint detection.
+</text>
 
 ### 4. Model Selection
 
@@ -145,6 +167,18 @@ struct LinearResampler {
     from_rate: f32,      // Source sample rate
     to_rate: f32,        // Target sample rate (16000)
     buffer: Vec<f32>,    // Stateful buffer for fractional samples
+}
+```
+
+#### `EndpointDetector` (v1.2.3+)
+```rust
+pub struct EndpointDetector {
+    vad: VadDetector,              // Energy-based VAD
+    sample_rate: u32,              // 16000 Hz
+    min_silence_duration: f32,     // 1.2s default
+    min_speech_duration: f32,      // 0.5s default
+    silence_samples: u32,          // Accumulated silence
+    speech_samples: u32,           // Accumulated speech
 }
 ```
 
@@ -841,10 +875,17 @@ sudo dmesg | tail -20 | grep segfault
 | 手动设置 LD_LIBRARY_PATH | 高 | ✅ 已修复 | build.rs |
 | 硬编码 16kHz 配置 | 中 | ✅ 已改进 | src/main.rs + src/resampler.rs |
 | 缺少设备选择功能 | 中 | ✅ 已实现 | src/main.rs |
+| Endpoint 检测崩溃 | 高 | ✅ 已解决 | src/vad.rs (v1.2.3) |
 | FFI 绑定手动维护 | 低 | 待优化 | src/ffi/mod.rs |
+
+**v1.2.3 更新**：
+- 实现了自定义 `EndpointDetector` 替代 sherpa-onnx 的不稳定 `is_endpoint`
+- 基于 VAD + 静音时长的可靠 endpoint 检测
+- 已集成到 CLI 和 GUI 模式
+- `OnlineRecognizer::is_endpoint()` 标记为废弃
 
 ---
 
 **最后更新**: 2026-02-03  
-**版本**: 0.1.1 (Phase 1.5 完成)  
-**状态**: ✅ 核心功能可用，短期改进已完成
+**版本**: 1.2.3 (Phase 2 完成 + Endpoint 优化)  
+**状态**: ✅ 核心功能可用，GUI 模式完整实现，Endpoint 检测已优化

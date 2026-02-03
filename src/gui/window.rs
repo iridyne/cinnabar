@@ -95,6 +95,9 @@ impl eframe::App for CinnabarWindow {
                             let _ = injector.paste_text(&text);
                         }
 
+                        // 重置 endpoint 检测器
+                        recognizer.reset_endpoint();
+
                         // 返回待机状态
                         let state_manager = self.state_manager.lock().unwrap();
                         state_manager.set_state(AppState::Idle);
