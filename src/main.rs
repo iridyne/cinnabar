@@ -199,6 +199,7 @@ fn main() -> Result<()> {
     };
 
     let mut last_result = String::new();
+    let mut last_update_time = std::time::Instant::now();
 
     while running.load(Ordering::Relaxed) {
         if let Ok(samples) = rx.recv_timeout(std::time::Duration::from_millis(100)) {
@@ -248,20 +249,14 @@ fn main() -> Result<()> {
             let trimmed = result.trim();
 
             if !trimmed.is_empty() && trimmed != last_result {
-                // 检测句子结束标点
-                let has_sentence_end = trimmed.ends_with('。')
-                    || trimmed.ends_with('？')
-                    || trimmed.ends_with('！')
-                    || trimmed.ends_with('.')
-                    || trimmed.ends_with('?')
-                    || trimmed.ends_with('!');
+                last_result = trimmed.to_string();
+                last_update_time = std::time::Instant::now();
+            }
 
-                if has_sentence_end {
-                    println!("{}", trimmed);
-                    last_result.clear();
-                } else {
-                    last_result = trimmed.to_string();
-                }
+            // 如果超过 500ms 没有新内容，输出当前结果
+            if !last_result.is_empty() && last_update_time.elapsed().as_millis() > 500 {
+                println!("{}", last_result);
+                last_result.clear();
             }
 
             if args.verbose {
