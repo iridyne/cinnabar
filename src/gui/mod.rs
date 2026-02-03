@@ -41,7 +41,7 @@ pub fn run_gui_mode() -> Result<()> {
             let state_manager_ref = window.state_manager();
 
             hotkey_manager_clone.lock().unwrap().set_callback(move || {
-                let mut state_manager = state_manager_ref.lock().unwrap();
+                let state_manager = state_manager_ref.lock().unwrap();
 
                 // 切换状态
                 match state_manager.get_state() {
