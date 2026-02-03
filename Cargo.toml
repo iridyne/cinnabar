@@ -1,6 +1,6 @@
 [package]
 name = "cinnabar"
-version = "1.2.0"
+version = "1.2.1"
 edition = "2021"
 authors = ["Cinnabar Team"]
 description = "Lightweight, offline-first, streaming speech-to-text input tool for Linux"
