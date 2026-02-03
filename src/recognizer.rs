@@ -116,6 +116,14 @@ impl RecognizerEngine {
         })
     }
 
+    pub fn start(&mut self) {
+        self.running.store(true, Ordering::Relaxed);
+    }
+
+    pub fn stop(&mut self) {
+        self.running.store(false, Ordering::Relaxed);
+    }
+
     pub fn process(&mut self, stream: &mut crate::ffi::OnlineStream) -> Option<String> {
         if !self.running.load(Ordering::Relaxed) {
             return None;

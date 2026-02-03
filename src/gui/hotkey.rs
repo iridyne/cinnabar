@@ -5,11 +5,13 @@ use global_hotkey::{
 };
 use std::sync::{Arc, Mutex};
 
+type HotkeyCallback = Arc<Mutex<Option<Box<dyn FnMut() + Send + 'static>>>>;
+
 /// 热键管理器
 pub struct HotkeyManager {
     manager: GlobalHotKeyManager,
     hotkey: HotKey,
-    callback: Arc<Mutex<Option<Box<dyn FnMut() + Send + 'static>>>>,
+    callback: HotkeyCallback,
 }
 
 impl HotkeyManager {

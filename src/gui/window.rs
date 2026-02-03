@@ -18,9 +18,12 @@ pub struct CinnabarWindow {
 
 impl CinnabarWindow {
     /// 创建新的悬浮窗实例
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let recognizer =
-            RecognizerEngine::new(&std::path::PathBuf::from("./models"), None, None).ok();
+    pub fn new(_cc: &eframe::CreationContext<'_>, model_dir: &std::path::Path) -> Self {
+        let mut recognizer = RecognizerEngine::new(model_dir, None, None).ok();
+
+        if let Some(ref mut r) = recognizer {
+            r.start();
+        }
 
         let stream = recognizer.as_ref().map(|r| r.create_stream());
         let injector = TextInjector::new().ok();
@@ -61,16 +64,18 @@ impl eframe::App for CinnabarWindow {
             ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
         }
 
-        let state_manager = self.state_manager.lock().unwrap();
-
         // 处理语音识别
-        if state_manager.get_state() == AppState::Listening {
+        let current_state = self.state_manager.lock().unwrap().get_state();
+
+        if current_state == AppState::Listening {
             if let (Some(ref mut recognizer), Some(ref mut stream)) =
                 (&mut self.recognizer, &mut self.stream)
             {
                 if let Some(text) = recognizer.process(stream) {
+                    let mut state_manager = self.state_manager.lock().unwrap();
                     state_manager.set_text(text.clone());
                     state_manager.set_state(AppState::Recognizing);
+                    drop(state_manager);
 
                     // 检测句子结束
                     if text.ends_with('。')
@@ -80,7 +85,10 @@ impl eframe::App for CinnabarWindow {
                         || text.ends_with('?')
                         || text.ends_with('!')
                     {
-                        state_manager.set_state(AppState::Injecting);
+                        self.state_manager
+                            .lock()
+                            .unwrap()
+                            .set_state(AppState::Injecting);
 
                         // 注入文本
                         if let Some(ref mut injector) = self.injector {
@@ -88,12 +96,15 @@ impl eframe::App for CinnabarWindow {
                         }
 
                         // 返回待机状态
+                        let mut state_manager = self.state_manager.lock().unwrap();
                         state_manager.set_state(AppState::Idle);
                         state_manager.clear_text();
                     }
                 }
             }
         }
+
+        let state_manager = self.state_manager.lock().unwrap();
 
         // 设置窗口样式
         egui::CentralPanel::default().show(ctx, |ui| {

@@ -20,7 +20,7 @@ use std::sync::Arc;
 #[derive(Parser, Debug)]
 #[command(name = "cinnabar")]
 #[command(about = "轻量级、离线优先的 Linux 流式语音转文字工具")]
-struct Args {
+pub struct Args {
     /// 运行模式：cli 或 gui
     #[arg(short, long, default_value = "cli")]
     mode: String,
@@ -29,7 +29,7 @@ struct Args {
     model_dir: PathBuf,
 
     #[arg(short, long)]
-    config: Option<PathBuf>,
+    pub config: Option<PathBuf>,
 
     #[arg(long)]
     list_devices: bool,
@@ -47,16 +47,9 @@ struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    // 加载配置文件
-    let config = if let Some(config_path) = &args.config {
-        config::Config::load(config_path)?
-    } else {
-        config::Config::default()
-    };
-
     // 模式切换
     match args.mode.as_str() {
-        "gui" => return gui::run_gui_mode(),
+        "gui" => return gui::run_gui_mode(&args),
         "cli" => {} // 继续执行 CLI 模式
         _ => anyhow::bail!("无效的模式。使用 'cli' 或 'gui'"),
     }

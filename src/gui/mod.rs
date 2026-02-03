@@ -12,10 +12,13 @@ use hotkey::HotkeyManager;
 use std::sync::{Arc, Mutex};
 
 /// 运行 GUI 模式
-pub fn run_gui_mode() -> Result<()> {
+pub fn run_gui_mode(args: &crate::Args) -> Result<()> {
     // 加载配置
-    let config =
-        crate::config::Config::load(&std::path::PathBuf::from("./config.toml")).unwrap_or_default();
+    let config = if let Some(config_path) = &args.config {
+        crate::config::Config::load(config_path)?
+    } else {
+        crate::config::Config::load(&std::path::PathBuf::from("./config.toml")).unwrap_or_default()
+    };
 
     // 创建热键管理器
     let hotkey_code = match config.hotkey.as_str() {
@@ -40,11 +43,13 @@ pub fn run_gui_mode() -> Result<()> {
 
     let hotkey_manager_clone = Arc::clone(&hotkey_manager);
 
+    let model_dir = std::path::PathBuf::from(&config.model_dir);
+
     eframe::run_native(
         "Cinnabar",
         options,
         Box::new(move |cc| {
-            let mut window = CinnabarWindow::new(cc);
+            let mut window = CinnabarWindow::new(cc, &model_dir);
 
             // 设置热键回调
             let state_manager_ref = window.state_manager();
