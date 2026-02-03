@@ -92,6 +92,7 @@ impl TextInjector {
     /// 1. Set text to clipboard
     /// 2. Wait for clipboard sync (50ms)
     /// 3. Simulate Ctrl+Shift+V key combination
+    #[allow(dead_code)]
     pub fn paste_text_terminal(&mut self, text: &str) -> Result<()> {
         // Step 1: Set clipboard content
         self.clipboard

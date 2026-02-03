@@ -120,6 +120,7 @@ impl RecognizerEngine {
         self.running.store(true, Ordering::Relaxed);
     }
 
+    #[allow(dead_code)]
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
     }

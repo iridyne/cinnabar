@@ -18,6 +18,9 @@ evdev = "0.12"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
 
+[dev-dependencies]
+tempfile = "3.13"
+
 # GUI 模式依赖
 egui = "0.30"
 eframe = { version = "0.30", default-features = false, features = ["wayland", "glow"] }

@@ -43,3 +43,38 @@ impl Config {
         Ok(toml::from_str(&content)?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn test_config_default() {
+        let config = Config::default();
+        assert_eq!(config.model_dir, "./models");
+        assert_eq!(config.vad_threshold, 0.01);
+        assert_eq!(config.hotkey, "F3");
+    }
+
+    #[test]
+    fn test_config_load_nonexistent() {
+        let result = Config::load(&std::path::PathBuf::from("/nonexistent/config.toml"));
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(config.model_dir, "./models");
+    }
+
+    #[test]
+    fn test_config_load_valid() {
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(temp_file, "model_dir = \"/custom/models\"").unwrap();
+        writeln!(temp_file, "vad_threshold = 0.05").unwrap();
+        writeln!(temp_file, "hotkey = \"F4\"").unwrap();
+
+        let config = Config::load(temp_file.path()).unwrap();
+        assert_eq!(config.model_dir, "/custom/models");
+        assert_eq!(config.vad_threshold, 0.05);
+        assert_eq!(config.hotkey, "F4");
+    }
+}
