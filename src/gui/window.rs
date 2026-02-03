@@ -46,7 +46,7 @@ impl CinnabarWindow {
 }
 
 impl eframe::App for CinnabarWindow {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // 处理热键事件
         if let Some(ref hotkey_manager) = self.hotkey_manager {
             hotkey_manager.lock().unwrap().handle_events();
