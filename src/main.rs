@@ -247,7 +247,7 @@ fn main() -> Result<()> {
             let result = recognizer.get_result(&stream);
             let trimmed = result.trim();
 
-            if !trimmed.is_empty() {
+            if !trimmed.is_empty() && trimmed != last_result {
                 // 检测句子结束标点
                 let has_sentence_end = trimmed.ends_with('。')
                     || trimmed.ends_with('？')
@@ -256,15 +256,10 @@ fn main() -> Result<()> {
                     || trimmed.ends_with('?')
                     || trimmed.ends_with('!');
 
-                if has_sentence_end && trimmed != last_result {
-                    // 句子结束，输出完整句子并换行
-                    print!("\r\x1b[K{}\n", trimmed);
-                    std::io::Write::flush(&mut std::io::stdout()).ok();
+                if has_sentence_end {
+                    println!("{}", trimmed);
                     last_result.clear();
                 } else {
-                    // 句子未结束，在同一行更新
-                    print!("\r\x1b[K{}", trimmed);
-                    std::io::Write::flush(&mut std::io::stdout()).ok();
                     last_result = trimmed.to_string();
                 }
             }
